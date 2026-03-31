@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nifty-options-algo"
+version = "0.1.0"
+description = "End-to-end Nifty Options Algo Trading System with Kite Connect"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "pandas>=2.2.0",
+  "numpy>=1.26.0",
+  "pydantic>=2.8.0",
+  "python-dotenv>=1.0.1",
+  "kiteconnect>=5.0.0",
+  "streamlit>=1.35.0",
+  "pandas-ta>=0.3.14b0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2.0",
+  "pytest-cov>=5.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["algo_trading*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

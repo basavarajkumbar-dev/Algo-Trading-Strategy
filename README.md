@@ -15,7 +15,7 @@ Production-style modular Python system for **Nifty options** that supports:
 - Neutral/Income: Iron Condor, Short Straddle, Short Strangle
 - Hedged: Protective Put, Covered Call
 
-Each strategy supports configurable entry, stop-loss, target (enforced minimum 1:2 reward-to-risk), and multi-leg orders.
+Each strategy supports configurable entry, stop-loss, target (1:2 risk-reward), and multi-leg orders.
 
 ### Strategy selection engine
 - Market state classification: bullish / bearish / sideways
@@ -60,8 +60,6 @@ tests/
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-# optional editable install
 pip install -e .[dev]
 ```
 
@@ -85,7 +83,7 @@ The app reads these variables through `python-dotenv` in `algo_trading/config/se
 ```bash
 python main.py --mode backtest
 ```
-Outputs summary and CSV reports under `reports/`. Backtest outcomes are deterministic from next-window price movement vs strategy direction (not random coin-flips).
+Outputs summary and CSV reports under `reports/`.
 
 ### Paper trading (live simulation)
 ```bash

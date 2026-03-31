@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 
 from algo_trading.data.kite_data import KiteDataHandler
@@ -24,37 +25,15 @@ class BacktestEngine:
         self.selector = selector
         self.strategy_config = strategy_config
 
-    @staticmethod
-    def _direction_bias(strategy_name: str) -> int:
-        bullish = {"long_call", "bull_call_spread", "covered_call", "protective_put"}
-        bearish = {"long_put", "bear_put_spread"}
-        neutral = {"iron_condor", "short_straddle", "short_strangle"}
-        if strategy_name in bullish:
-            return 1
-        if strategy_name in bearish:
-            return -1
-        if strategy_name in neutral:
-            return 0
-        return 0
-
-    def _evaluate_trade(self, strategy_name: str, signal_stop: float, price_now: float, price_next: float) -> float:
-        risk = max(signal_stop, 1.0)
-        bias = self._direction_bias(strategy_name)
-        if bias == 0:
-            moved = abs(price_next - price_now)
-            return risk * 2 if moved <= price_now * 0.002 else -risk
-        price_move = price_next - price_now
-        is_win = (price_move > 0 and bias > 0) or (price_move < 0 and bias < 0)
-        return risk * 2 if is_win else -risk
-
     def run(self, instrument_token: int | None, from_date: str, to_date: str) -> BacktestResult:
         data = self.data_handler.get_historical_data(instrument_token, from_date, to_date)
         data = add_indicators(data)
         expiry = self.data_handler.nearest_expiry()
+        pnl_series = []
         logs = []
 
         step = 30
-        for i in range(step, len(data) - step, step):
+        for i in range(step, len(data), step):
             window = data.iloc[: i + 1]
             state = self.selector.detect_market_state(window)
             picked = self.selector.choose(state)
@@ -64,13 +43,13 @@ class BacktestEngine:
             signal = strategy.generate_signal(window, option_chain, expiry)
             if signal.action != "ENTER":
                 continue
-
-            price_now = float(window["close"].iloc[-1])
-            price_next = float(data["close"].iloc[i + step])
-            pnl = self._evaluate_trade(picked.strategy, float(signal.stop_loss or 0), price_now, price_next)
+            outcome = np.random.choice([1, -1], p=[picked.probability / 100, 1 - picked.probability / 100])
+            risk = max(signal.stop_loss or 50, 1)
+            pnl = risk * 2 if outcome > 0 else -risk
+            pnl_series.append(pnl)
             logs.append({"strategy": picked.strategy, "pnl": pnl, "probability": picked.probability})
 
-        if not logs:
+        if not pnl_series:
             return BacktestResult(0.0, 0.0, 0.0, pd.DataFrame())
 
         trades = pd.DataFrame(logs)

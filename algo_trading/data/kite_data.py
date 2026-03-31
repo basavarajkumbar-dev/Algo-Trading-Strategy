@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 import numpy as np
@@ -73,7 +73,7 @@ class KiteDataHandler:
         return pd.DataFrame(rows)
 
     def nearest_expiry(self) -> str:
-        today = datetime.now(timezone.utc).date()
+        today = datetime.utcnow().date()
         days_ahead = (3 - today.weekday()) % 7
         if days_ahead == 0:
             days_ahead = 7

@@ -24,28 +24,15 @@ class RiskManager:
             return False, "Max trades hit"
         if abs(self.state.day_loss) >= self.settings.capital * self.settings.daily_loss_limit_pct:
             return False, "Daily loss limit reached"
-        if not self._is_valid_rr(signal):
-            return False, "Risk:Reward validation failed"
-
         trade_risk = self.estimate_trade_risk(signal)
         if trade_risk > self.settings.capital * self.settings.max_risk_per_trade_pct:
             return False, "Risk per trade exceeded"
         return True, "OK"
 
-    def _is_valid_rr(self, signal: Signal) -> bool:
-        if signal.stop_loss is None or signal.target is None:
-            return False
-        risk = signal.stop_loss
-        reward = signal.target - signal.stop_loss
-        if risk <= 0:
-            return False
-        rr = reward / risk
-        return rr >= self.settings.reward_to_risk - 1e-6
-
     def estimate_trade_risk(self, signal: Signal) -> float:
         if signal.stop_loss is None:
             return 0.0
-        qty = max(sum(leg.qty for leg in signal.legs), 1)
+        qty = sum(leg.qty for leg in signal.legs)
         return float(signal.stop_loss * qty)
 
     def register_trade(self) -> None:

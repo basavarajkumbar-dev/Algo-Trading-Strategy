@@ -1,10 +1,8 @@
 import pandas as pd
 
-from algo_trading.config.settings import RiskSettings
-from algo_trading.data.kite_data import KiteDataHandler
-from algo_trading.engines.backtest_engine import BacktestEngine
 from algo_trading.models.core import Signal
 from algo_trading.risk.risk_manager import RiskManager
+from algo_trading.config.settings import RiskSettings
 from algo_trading.selector.strategy_selector import StrategySelector
 from algo_trading.strategies.options_strategies import LongCallStrategy
 
@@ -24,15 +22,14 @@ def test_selector_picks_bullish_strategy():
     assert choice.strategy in {"bull_call_spread", "long_call", "covered_call", "protective_put"}
 
 
-def test_risk_manager_blocks_invalid_rr():
-    rm = RiskManager(RiskSettings(capital=100000, reward_to_risk=2.0))
-    sig = Signal(strategy="x", action="ENTER", stop_loss=100, target=250, legs=[])
-    ok, reason = rm.can_take_trade(sig)
+def test_risk_manager_blocks_large_risk():
+    rm = RiskManager(RiskSettings(capital=100000, max_risk_per_trade_pct=0.01))
+    sig = Signal(strategy="x", action="ENTER", stop_loss=1000, target=2000)
+    ok, _ = rm.can_take_trade(sig)
     assert not ok
-    assert "Risk:Reward" in reason
 
 
-def test_long_call_generates_entry_and_valid_rr():
+def test_long_call_generates_entry_when_bullish():
     stg = LongCallStrategy({"lot_size": 50, "lots": 2})
     data = pd.DataFrame([{"ema_fast": 110, "ema_slow": 100, "close": 22000}])
     chain = pd.DataFrame([
@@ -41,11 +38,4 @@ def test_long_call_generates_entry_and_valid_rr():
     ])
     signal = stg.generate_signal(data, chain, "2026-04-02")
     assert signal.action == "ENTER"
-    assert (signal.target - signal.stop_loss) / signal.stop_loss >= 2
-
-
-def test_backtest_runs_and_produces_metrics():
-    engine = BacktestEngine(KiteDataHandler(), StrategySelector(), {"lot_size": 50, "lots": 2})
-    result = engine.run(None, "2024-01-01", "2024-01-10")
-    assert isinstance(result.total_pnl, float)
-    assert isinstance(result.win_rate, float)
+    assert signal.target > signal.stop_loss

@@ -13,12 +13,6 @@ def _qty(config: dict) -> int:
     return int(config.get("lot_size", 50) * config.get("lots", 2))
 
 
-def _rr(entry_cost: float) -> tuple[float, float]:
-    risk = max(entry_cost * 0.3, 10.0)
-    target = risk * 3  # 1:2 reward:risk where reward = target - stop
-    return risk, target
-
-
 class LongCallStrategy(BaseStrategy):
     name = "long_call"
 
@@ -28,7 +22,8 @@ class LongCallStrategy(BaseStrategy):
             return Signal(strategy=self.name, action="HOLD", reason="No bullish trend")
         strike = select_strike(option_chain, "CE", style="ATM")
         premium = float(option_chain[(option_chain["strike"] == strike) & (option_chain["type"] == "CE")]["premium"].iloc[0])
-        sl, target = _rr(premium)
+        sl = premium * 0.7
+        target = premium + (premium - sl) * 2
         leg = OptionLeg(symbol=f"NIFTY{expiry}{int(strike)}CE", side="BUY", qty=_qty(self.config), strike=strike, option_type="CE", expiry=expiry, entry_price=premium)
         return Signal(strategy=self.name, action="ENTER", legs=[leg], stop_loss=sl, target=target, reason="EMA bullish crossover")
 
@@ -42,7 +37,8 @@ class LongPutStrategy(BaseStrategy):
             return Signal(strategy=self.name, action="HOLD", reason="No bearish trend")
         strike = select_strike(option_chain, "PE", style="ATM")
         premium = float(option_chain[(option_chain["strike"] == strike) & (option_chain["type"] == "PE")]["premium"].iloc[0])
-        sl, target = _rr(premium)
+        sl = premium * 0.7
+        target = premium + (premium - sl) * 2
         leg = OptionLeg(symbol=f"NIFTY{expiry}{int(strike)}PE", side="BUY", qty=_qty(self.config), strike=strike, option_type="PE", expiry=expiry, entry_price=premium)
         return Signal(strategy=self.name, action="ENTER", legs=[leg], stop_loss=sl, target=target, reason="EMA bearish crossover")
 
@@ -58,8 +54,9 @@ class BullCallSpreadStrategy(BaseStrategy):
         sell_strike = buy_strike + 100
         buy_p = float(option_chain[(option_chain["strike"] == buy_strike) & (option_chain["type"] == "CE")]["premium"].iloc[0])
         sell_p = float(option_chain[(option_chain["strike"] == sell_strike) & (option_chain["type"] == "CE")]["premium"].iloc[0])
-        net = max(buy_p - sell_p, 1)
-        sl, target = _rr(net)
+        net = buy_p - sell_p
+        sl = net * 0.6
+        target = net + (net - sl) * 2
         legs = [
             OptionLeg(symbol=f"NIFTY{expiry}{int(buy_strike)}CE", side="BUY", qty=_qty(self.config), strike=buy_strike, option_type="CE", expiry=expiry, entry_price=buy_p),
             OptionLeg(symbol=f"NIFTY{expiry}{int(sell_strike)}CE", side="SELL", qty=_qty(self.config), strike=sell_strike, option_type="CE", expiry=expiry, entry_price=sell_p),
@@ -78,8 +75,9 @@ class BearPutSpreadStrategy(BaseStrategy):
         sell_strike = buy_strike - 100
         buy_p = float(option_chain[(option_chain["strike"] == buy_strike) & (option_chain["type"] == "PE")]["premium"].iloc[0])
         sell_p = float(option_chain[(option_chain["strike"] == sell_strike) & (option_chain["type"] == "PE")]["premium"].iloc[0])
-        net = max(buy_p - sell_p, 1)
-        sl, target = _rr(net)
+        net = buy_p - sell_p
+        sl = net * 0.6
+        target = net + (net - sl) * 2
         legs = [
             OptionLeg(symbol=f"NIFTY{expiry}{int(buy_strike)}PE", side="BUY", qty=_qty(self.config), strike=buy_strike, option_type="PE", expiry=expiry, entry_price=buy_p),
             OptionLeg(symbol=f"NIFTY{expiry}{int(sell_strike)}PE", side="SELL", qty=_qty(self.config), strike=sell_strike, option_type="PE", expiry=expiry, entry_price=sell_p),
@@ -92,16 +90,18 @@ class IronCondorStrategy(BaseStrategy):
 
     def generate_signal(self, data: pd.DataFrame, option_chain: pd.DataFrame, expiry: str) -> Signal:
         spot = float(data["close"].iloc[-1])
-        low_put, short_put, short_call, high_call = spot - 200, spot - 100, spot + 100, spot + 200
+        low_put = spot - 200
+        short_put = spot - 100
+        short_call = spot + 100
+        high_call = spot + 200
         qty = _qty(self.config)
-        sl, target = 120.0, 360.0
         legs: List[OptionLeg] = [
             OptionLeg(symbol=f"NIFTY{expiry}{int(short_put)}PE", side="SELL", qty=qty, strike=short_put, option_type="PE", expiry=expiry),
             OptionLeg(symbol=f"NIFTY{expiry}{int(low_put)}PE", side="BUY", qty=qty, strike=low_put, option_type="PE", expiry=expiry),
             OptionLeg(symbol=f"NIFTY{expiry}{int(short_call)}CE", side="SELL", qty=qty, strike=short_call, option_type="CE", expiry=expiry),
             OptionLeg(symbol=f"NIFTY{expiry}{int(high_call)}CE", side="BUY", qty=qty, strike=high_call, option_type="CE", expiry=expiry),
         ]
-        return Signal(strategy=self.name, action="ENTER", legs=legs, stop_loss=sl, target=target, reason="Range-bound with defined risk")
+        return Signal(strategy=self.name, action="ENTER", legs=legs, stop_loss=120.0, target=240.0, reason="Range-bound with defined risk")
 
 
 class ShortStraddleStrategy(BaseStrategy):
@@ -114,7 +114,7 @@ class ShortStraddleStrategy(BaseStrategy):
             OptionLeg(symbol=f"NIFTY{expiry}{int(atm)}CE", side="SELL", qty=qty, strike=atm, option_type="CE", expiry=expiry),
             OptionLeg(symbol=f"NIFTY{expiry}{int(atm)}PE", side="SELL", qty=qty, strike=atm, option_type="PE", expiry=expiry),
         ]
-        return Signal(strategy=self.name, action="ENTER", legs=legs, stop_loss=150.0, target=450.0, reason="Low movement volatility crush setup")
+        return Signal(strategy=self.name, action="ENTER", legs=legs, stop_loss=150.0, target=300.0, reason="Low movement volatility crush setup")
 
 
 class ShortStrangleStrategy(BaseStrategy):
@@ -127,7 +127,7 @@ class ShortStrangleStrategy(BaseStrategy):
             OptionLeg(symbol=f"NIFTY{expiry}{int(spot + 150)}CE", side="SELL", qty=qty, strike=spot + 150, option_type="CE", expiry=expiry),
             OptionLeg(symbol=f"NIFTY{expiry}{int(spot - 150)}PE", side="SELL", qty=qty, strike=spot - 150, option_type="PE", expiry=expiry),
         ]
-        return Signal(strategy=self.name, action="ENTER", legs=legs, stop_loss=140.0, target=420.0, reason="Sideways to mild trend neutral income")
+        return Signal(strategy=self.name, action="ENTER", legs=legs, stop_loss=140.0, target=280.0, reason="Sideways to mild trend neutral income")
 
 
 class ProtectivePutStrategy(BaseStrategy):
@@ -141,7 +141,7 @@ class ProtectivePutStrategy(BaseStrategy):
             OptionLeg(symbol="NIFTY-FUT", side="BUY", qty=qty, strike=spot, option_type="FUT", expiry=expiry),
             OptionLeg(symbol=f"NIFTY{expiry}{int(put_strike)}PE", side="BUY", qty=qty, strike=put_strike, option_type="PE", expiry=expiry),
         ]
-        return Signal(strategy=self.name, action="ENTER", legs=legs, stop_loss=100.0, target=300.0, reason="Hedge downside on long underlying")
+        return Signal(strategy=self.name, action="ENTER", legs=legs, stop_loss=100.0, target=200.0, reason="Hedge downside on long underlying")
 
 
 class CoveredCallStrategy(BaseStrategy):
@@ -155,4 +155,4 @@ class CoveredCallStrategy(BaseStrategy):
             OptionLeg(symbol="NIFTY-FUT", side="BUY", qty=qty, strike=spot, option_type="FUT", expiry=expiry),
             OptionLeg(symbol=f"NIFTY{expiry}{int(call_strike)}CE", side="SELL", qty=qty, strike=call_strike, option_type="CE", expiry=expiry),
         ]
-        return Signal(strategy=self.name, action="ENTER", legs=legs, stop_loss=90.0, target=270.0, reason="Income on long underlying")
+        return Signal(strategy=self.name, action="ENTER", legs=legs, stop_loss=90.0, target=180.0, reason="Income on long underlying")

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 import uuid
 
@@ -43,7 +43,7 @@ class BaseTradingEngine:
             return None
 
         self.executor.execute_signal(signal)
-        trade = Trade(trade_id=str(uuid.uuid4()), strategy=signal.strategy, timestamp=datetime.now(timezone.utc), legs=signal.legs)
+        trade = Trade(trade_id=str(uuid.uuid4()), strategy=signal.strategy, timestamp=datetime.utcnow(), legs=signal.legs)
         self.trades.append(trade)
         self.risk.register_trade()
         self._log_trade(trade, picked.probability, reason)
